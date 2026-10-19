@@ -3,8 +3,6 @@
 面向**商用密码应用安全性评估（密评）**的离线验证工具箱：算法校验、证书与签章核验、协议取证、随机性检测。
 所有运算均在本机完成，不依赖网络与外部服务。
 
-![首页](build/screenshots/light/home.png)
-
 ## 功能清单（6 大类 19 个功能页）
 
 | 分类 | 功能页 | 说明 |
@@ -86,7 +84,6 @@ python -m venv .venv
 
 ## 准确性说明（摘要）
 
-详见 [docs/accuracy.md](docs/accuracy.md)。
 
 - SM2 签名的用户标识（UID）真正参与 ZA 计算；证书/CMS/PDF 验签时按“签名者证书 Subject DER → 空 → 默认 1234567812345678”依次尝试并**报告实际使用的约定**（不同实现的 SM2 UID 约定不同，本项目不静默通过）
 - ECDSA 证书验签使用 DER 编码签名（修复原项目误用 P1363 的问题）
@@ -124,7 +121,5 @@ cryptotoolbox/
 
 ## 许可与第三方
 
-- 本项目代码：按项目需要自行使用
-- guojuntang/gmt_randomness_test（BSD-3-Clause）：随机性检测实现参考与参数来源，署名见 NOTICE.md
-- PySide6（LGPL-3.0）、PyCryptodome（BSD-2-Clause）、pypdf（BSD-3-Clause）、gmalg、tongsuopy、numpy 等依赖遵循各自许可证
+- 仅供学习交流参考 未经允许禁止二改与商用
 
