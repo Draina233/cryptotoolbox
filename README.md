@@ -132,6 +132,3 @@ cryptotoolbox/
 - guojuntang/gmt_randomness_test（BSD-3-Clause）：随机性检测实现参考与参数来源，署名见 NOTICE.md
 - PySide6（LGPL-3.0）、PyCryptodome（BSD-2-Clause）、pypdf（BSD-3-Clause）、gmalg、tongsuopy、numpy 等依赖遵循各自许可证
 
-## 开发者
-
-Draina（河南省中远科技有限公司）｜ draina@qq.com ｜ https://github.com/Draina233
