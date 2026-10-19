@@ -222,3 +222,36 @@ def build_signed_ofd(cert_der: bytes, sm2_private: bytes, *, tamper: bool = Fals
         zf.writestr("Doc_0/Signs/Sign_0/Signature.xml", sig_xml)
     return buffer.getvalue()
 
+
+
+
+def build_gm_signed_pdf(cert_der: bytes, key) -> bytes:
+    """构造国密电子签章 SignedData（OID 1.2.156.10197.6.1.4.2.2）PDF 样本。"""
+    from cryptotoolbox.core.der import build_integer, build_oid, build_sequence, build_set, build_tlv
+    from cryptotoolbox.core.x509 import parse_certificate
+
+    cert = parse_certificate(cert_der)
+    placeholder = build_signed_pdf(build_tlv(0x30, b""))
+    sig = __import__("cryptotoolbox.core.seal", fromlist=["_find_pdf_signatures"])._find_pdf_signatures(placeholder)[0]
+    signed = __import__("cryptotoolbox.core.seal", fromlist=["_reconstruct_ranges"])._reconstruct_ranges(placeholder, sig["byte_range"])
+    signature = sm2.rs_to_der(*sm2.sign(signed, key, b"1234567812345678"))
+    sm3_oid = "1.2.156.10197.1.401"
+    signer = build_sequence(
+        build_integer(1),
+        build_sequence(cert.issuer.raw, build_integer(cert.serial)),
+        build_sequence(build_oid(sm3_oid)),
+        build_sequence(build_oid("1.2.156.10197.1.301.1")),
+        build_tlv(0x04, signature),
+    )
+    signed_data = build_sequence(
+        build_integer(1),
+        build_set(build_sequence(build_oid(sm3_oid))),
+        build_sequence(build_tlv(0x06, b"\x00")),
+        build_tlv(0xA0, cert_der),
+        build_set(signer),
+    )
+    content_info = build_sequence(
+        build_oid("1.2.156.10197.6.1.4.2.2"),
+        build_tlv(0xA0, signed_data),
+    )
+    return build_signed_pdf(content_info)

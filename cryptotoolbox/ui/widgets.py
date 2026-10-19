@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Callable, Iterable, Optional
 
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QGuiApplication
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QTextOption
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -162,7 +162,10 @@ class MonoText(QPlainTextEdit):
         self.setReadOnly(True)
         self.setPlaceholderText(placeholder)
         self.setMinimumHeight(min_height)
-        self.setLineWrapMode(QPlainTextEdit.NoWrap)
+        # 长十六进制/签名值等按可用宽度自动换行，避免只能横向拖动
+        self.setLineWrapMode(QPlainTextEdit.WidgetWidth)
+        self.setWordWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         f = QFont("Cascadia Mono")
         f.setStyleHint(QFont.Monospace)
         self.setFont(f)
@@ -173,10 +176,11 @@ class TextInput(QPlainTextEdit):
         super().__init__()
         self.setPlaceholderText(placeholder)
         self.setMinimumHeight(min_height)
+        self.setLineWrapMode(QPlainTextEdit.WidgetWidth)
+        self.setWordWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         if mono:
             self.setObjectName("mono")
-            # 十六进制/长文本按窗口宽度自动换行，避免内容超出输入框
-            self.setLineWrapMode(QPlainTextEdit.WidgetWidth)
 
 
 class CopyButton(QPushButton):

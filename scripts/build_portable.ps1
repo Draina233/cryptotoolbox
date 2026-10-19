@@ -1,6 +1,6 @@
 param(
     [string]$Name = "密评工具箱",
-    [string]$Version = "2.0.0"
+    [string]$Version = "2.0.1"
 )
 
 $ErrorActionPreference = "Stop"

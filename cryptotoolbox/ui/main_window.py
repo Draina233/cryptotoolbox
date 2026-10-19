@@ -10,6 +10,7 @@ from PySide6.QtGui import QColor, QIcon, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QColorDialog,
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -33,7 +34,9 @@ from .pages.home import HomePage
 from .sidebar import Sidebar
 from .state import palette, set_theme, theme_name
 from ..theme import DEFAULT_ACCENT, build_qt_palette, qss
+from ..update_check import UpdateChecker, is_newer
 from .assets import app_icon_path
+from .update_dialog import UpdateDialog
 from .widgets import HintLabel, MonoText
 from .workers import Task
 from .icons import make_icon
@@ -81,7 +84,7 @@ class MainWindow(QMainWindow):
         accent = str(self._settings.value("accent", DEFAULT_ACCENT)) or DEFAULT_ACCENT
         set_theme(theme, scale, accent)
 
-        self.setWindowTitle("密评工具箱 · V2.0.0")
+        self.setWindowTitle(f"密评工具箱 · V{__version__}")
         self.setWindowIcon(QIcon(app_icon_path()))
         self._apply_window_geometry()
         self.setMinimumSize(980, 620)
@@ -119,6 +122,7 @@ class MainWindow(QMainWindow):
         shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
         shortcut.activated.connect(self._focus_search)
         self._restore_window_state()
+        QTimer.singleShot(1500, self._check_for_updates)
 
     # ------------------------------------------------------------ 构建
     def _build_topbar(self) -> QWidget:
@@ -183,7 +187,7 @@ class MainWindow(QMainWindow):
         self.cancel_btn.clicked.connect(self._cancel_task)
         h.addWidget(self.cancel_btn)
 
-        ver = QLabel(f"密评工具箱V{__version__}   ©Draina 河南省中远科技有限公司")
+        ver = QLabel(f"密评工具箱V{__version__}   ©Draina")
         ver.setObjectName("statusText")
         h.addWidget(ver)
         return bar
@@ -363,6 +367,8 @@ class MainWindow(QMainWindow):
             self._settings.setValue("theme", "light")
             self._settings.setValue("font_scale", 1.0)
             self._settings.setValue("accent", DEFAULT_ACCENT)
+            self._settings.setValue("check_updates", True)
+            self._update_cb.setChecked(True)
             set_theme("light", 1.0, DEFAULT_ACCENT)
             self._apply_theme()
 
@@ -375,6 +381,9 @@ class MainWindow(QMainWindow):
         accent_layout.addWidget(reset_btn)
         accent_layout.addStretch(1)
         form.addRow("强调色：", accent_row)
+        self._update_cb = QCheckBox("启动时检查更新（GitHub Releases）")
+        self._update_cb.setChecked(self._setting_bool("check_updates", True))
+        form.addRow("软件更新：", self._update_cb)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(dlg.accept)
         buttons.rejected.connect(dlg.reject)
@@ -384,6 +393,7 @@ class MainWindow(QMainWindow):
             self._settings.setValue("theme", theme.currentText())
             self._settings.setValue("font_scale", float(scale.currentData()))
             self._settings.setValue("accent", choice["accent"])
+            self._settings.setValue("check_updates", self._update_cb.isChecked())
             set_theme(theme.currentText(), float(scale.currentData()), choice["accent"])
             self._apply_theme()
             self.theme_changed.emit(theme.currentText())
@@ -432,7 +442,7 @@ class MainWindow(QMainWindow):
         )
         desc.setWordWrap(True)
         layout.addWidget(desc)
-        dev = QLabel("开发者：Draina（河南省中远科技有限公司）｜ draina@qq.com")
+        dev = QLabel("开发者：Draina ｜ draina@qq.com ｜ https://github.com/Draina233")
         dev.setObjectName("hintText")
         layout.addWidget(dev)
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
@@ -443,6 +453,39 @@ class MainWindow(QMainWindow):
         buttons.clicked.connect(dlg.accept)
         layout.addWidget(buttons)
         dlg.exec()
+
+    def _setting_bool(self, key: str, default: bool) -> bool:
+        value = self._settings.value(key, default)
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+    def _check_for_updates(self) -> None:
+        """启动后异步检查 GitHub Releases；离线/测试环境静默跳过。"""
+        if getattr(self, "_update_checked", False):
+            return
+        self._update_checked = True
+        if QApplication.platformName() == "offscreen":
+            return
+        if os.environ.get("CRYPTOTOOLBOX_NO_UPDATE_CHECK"):
+            return
+        if not self._setting_bool("check_updates", True):
+            return
+        try:
+            self._update_checker = UpdateChecker(self._on_update_checked, self)
+            self._update_checker.check()
+        except Exception:  # noqa: BLE001 - 更新检查失败不影响主程序
+            import logging
+
+            logging.getLogger(__name__).exception("update check failed to start")
+
+    def _on_update_checked(self, info) -> None:
+        if info is None or not self.isVisible():
+            return
+        if not is_newer(info.version, __version__):
+            return
+        dialog = UpdateDialog(info, __version__, self)
+        dialog.exec()
 
     def _current_primary(self) -> str:
         return palette()["primary"]

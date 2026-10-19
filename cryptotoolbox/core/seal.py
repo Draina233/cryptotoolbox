@@ -31,13 +31,16 @@ from .x509 import Certificate, parse_certificate
 MAX_FILE_BYTES = 60 * 1024 * 1024
 
 SM2_SM3_OID = "1.2.156.10197.1.501"
+GM_SIGNED_DATA_OID = "1.2.156.10197.6.1.4.2.2"   # 国密电子签章签名数据
+GM_SM2_SM3_OID = "1.2.156.10197.1.301.1"         # 国密电子签章中的 SM2-with-SM3
 KNOWN_SIG_OIDS = {
-    "1.2.156.10197.1.501", "1.2.840.113549.1.1.11", "1.2.840.113549.1.1.5",
+    "1.2.156.10197.1.501", "1.2.156.10197.1.301.1", "1.2.840.113549.1.1.11", "1.2.840.113549.1.1.5",
     "1.2.840.113549.1.1.12", "1.2.840.113549.1.1.13", "1.2.840.10045.4.3.2",
     "1.2.840.10045.4.3.3", "1.2.840.113549.1.1.1",
 }
 OID_LABELS = {
     "1.2.156.10197.1.501": "SM3withSM2",
+    "1.2.156.10197.1.301.1": "SM3withSM2（国密电子签章）",
     "1.2.840.113549.1.1.11": "SHA256withRSA",
     "1.2.840.113549.1.1.5": "SHA1withRSA",
     "1.2.840.113549.1.1.12": "SHA384withRSA",
@@ -81,6 +84,17 @@ class SignatureDetail:
 
 
 # ---------------------------------------------------------------- 通用
+def _add_raw_data(report: Report, label: str, data: bytes, limit: int = 4096) -> None:
+    """原始数据写入报告：短数据直接给出 HEX，超长数据给 SM3、长度与前 1KB 预览，避免界面卡顿。"""
+    if len(data) <= limit:
+        report.raw[label] = data.hex().upper()
+        return
+    base = label.replace("(HEX)", "")
+    report.raw[base + "(SM3)"] = sm3(data).hex().upper()
+    report.raw[base + "长度"] = f"{len(data)} 字节"
+    report.raw[base + "(前1024字节)"] = data[:1024].hex().upper() + "…"
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -259,6 +273,175 @@ def _find_path(tlv, depth: int = 0) -> str:
         except DerError:
             return ""
     return ""
+
+
+def parse_gm_signed_data(der: bytes) -> Optional[dict]:
+    """解析国密电子签章 SignedData（ContentInfo OID 1.2.156.10197.6.1.4.2.2）。
+
+    结构近似 PKCS#7 SignedData，但 encapContentInfo 的 OID 可能为 0.0（detached），
+    证书放在 [0]，SignerInfo 通常没有 signedAttrs，签名直接覆盖原文。
+    """
+    try:
+        top = parse_tlv(der)
+        items = top.children()
+    except DerError:
+        return None
+    if len(items) != 2 or items[0].tag != TAG_OID or not items[1].constructed:
+        return None
+    if items[0].as_oid() != GM_SIGNED_DATA_OID:
+        return None
+    try:
+        signed_data = items[1].children()[0]
+        children = signed_data.children()
+    except (DerError, IndexError):
+        return None
+    certs: list[Certificate] = []
+    for child in children:
+        if child.tag == 0 and child.constructed:
+            try:
+                for sub in child.children():
+                    try:
+                        certs.append(parse_certificate(sub.raw))
+                    except Exception:  # noqa: BLE001
+                        continue
+            except DerError:
+                continue
+    signer_infos = [c for c in children if c.tag == 0x11]  # SET
+    if not signer_infos:
+        return None
+    try:
+        signer = signer_infos[-1].children()[0]
+        fields = signer.children()
+    except (DerError, IndexError):
+        return None
+    try:
+        digest_oid = fields[2].children()[0].as_oid()
+        signature_oid = fields[3].children()[0].as_oid()
+    except (DerError, IndexError):
+        return None
+    signed_attrs = None
+    for field in fields[4:-1]:
+        if field.tag == 0 and field.constructed:
+            signed_attrs = field
+            break
+    last = fields[-1]
+    try:
+        if last.tag == TAG_OCTET_STRING:
+            signature = last.value
+        else:
+            signature, _unused = last.as_bit_string()
+    except DerError:
+        return None
+    return {
+        "cert": certs[0] if certs else None,
+        "certs": certs,
+        "digest_oid": digest_oid,
+        "signature_oid": signature_oid,
+        "signature": signature,
+        "signed_attrs": signed_attrs,
+    }
+
+
+def _gm_attrs_values(attrs_raw: bytes) -> tuple[bytes | None, datetime | None]:
+    """从 signedAttrs 中提取 messageDigest 与 signingTime。"""
+    digest = None
+    sign_time = None
+    try:
+        attrs = parse_tlv(attrs_raw)
+        for attr in attrs.children():
+            kids = attr.children()
+            if len(kids) < 2 or kids[0].tag != TAG_OID:
+                continue
+            oid = kids[0].as_oid()
+            values = kids[1]
+            if not values.constructed or not values.children():
+                continue
+            first = values.children()[0]
+            if oid == "1.2.840.113549.1.9.4" and first.tag == TAG_OCTET_STRING:
+                digest = first.value
+            elif oid == "1.2.840.113549.1.9.5":
+                try:
+                    sign_time = first.as_time()
+                except DerError:
+                    pass
+    except DerError:
+        pass
+    return digest, sign_time
+
+
+def _pdf_gm_signed_rows(report: Report, info: dict, signed: bytes,
+                        detail: SignatureDetail, now: datetime) -> None:
+    alg_label = OID_LABELS.get(info["signature_oid"], info["signature_oid"])
+    cert = info["cert"]
+    report.meta["签名算法"] = alg_label
+    report.meta["内容类型"] = GM_SIGNED_DATA_OID
+    detail.certificates = list(info["certs"])
+    detail.signature_hex = info["signature"].hex().upper()
+    if cert is not None:
+        detail.signer = cert
+        report.meta["公钥算法"] = cert.spki.algorithm_label
+        report.raw["公钥(HEX)"] = cert.spki.key_bits.hex().upper()
+    report.add("alg", "签名算法", PASS, f"{alg_label}（{info['signature_oid']}）")
+
+    attrs = info.get("signed_attrs")
+    digest_value = None
+    sign_time = None
+    data_for_sig = signed
+    if attrs is not None:
+        attrs_raw = attrs.raw
+        if attrs_raw[:1] == b"\xa0":
+            attrs_raw = b"\x31" + attrs_raw[1:]
+        data_for_sig = attrs_raw
+        digest_value, sign_time = _gm_attrs_values(attrs_raw)
+
+    verified = False
+    if cert is None:
+        report.add("sigval", "电子签章签名值正确性", UNKNOWN, "签名数据中未找到可解析的签名证书。")
+    else:
+        ok, message = verify_signature(
+            spki=cert.spki,
+            signature_algorithm_oid=info["signature_oid"],
+            signature_algorithm_params=b"",
+            data=data_for_sig,
+            signature=info["signature"],
+            signer_uid=[cert.subject.raw, b"", b"1234567812345678"],
+        )
+        verified = bool(ok)
+        report.add("sigval", "电子签章签名值正确性", PASS if ok else FAIL, message)
+
+        if sign_time is not None and cert.not_before <= sign_time <= cert.not_after:
+            report.add("cert-validity", "证书有效期", PASS,
+                       f"{cert.validity_text()}（签名时有效）")
+            report.add("cert-subject", "签名者", PASS, cert.subject.text())
+            report.add("cert-issuer", "颁发者", PASS, cert.issuer.text())
+            report.add("sign_time", "签章时间", PASS, sign_time.isoformat())
+        else:
+            _cert_rows(report, "cert", cert, now)
+            if sign_time is not None:
+                report.add("sign_time", "签章时间", PASS, sign_time.isoformat())
+            else:
+                report.add("sign_time", "签章时间", SKIP,
+                           "签名数据未包含 signedAttrs/signingTime，PDF /M 为空，无法按签署时刻校验证书。")
+            if verified and cert.time_status(now) == "已过期":
+                report.note("签名值密码学有效，但签名证书当前已过期；如需按签署时点判定，请提供可信时间戳。")
+
+    if attrs is None:
+        if verified:
+            report.add("digest", "原文摘要匹配", PASS,
+                       "无 signedAttrs：签名直接覆盖 PDF ByteRange 原文，签名通过即原文未被篡改。")
+        else:
+            report.add("digest", "原文摘要匹配", UNKNOWN,
+                       "无 signedAttrs，且签名值未通过，无法确认原文摘要。")
+    elif digest_value is None:
+        report.add("digest", "原文摘要匹配", UNKNOWN, "signedAttrs 中未解析到 messageDigest。")
+    elif digest_value == sm3(signed):
+        report.add("digest", "原文摘要匹配", PASS, "signedAttrs 的 messageDigest 与 ByteRange 原文的 SM3 一致。")
+    else:
+        report.add("digest", "原文摘要匹配", FAIL, "signedAttrs 的 messageDigest 与 ByteRange 原文的 SM3 不一致。")
+
+    _add_raw_data(report, "签名原文(HEX)", data_for_sig)
+    report.raw["签名值(HEX)"] = detail.signature_hex
+    report.note("国密电子签章签名数据（OID 1.2.156.10197.6.1.4.2.2）；detached 签名，证书内嵌于签名数据。")
 
 
 def parse_container(der: bytes) -> Optional[SealContainer]:
@@ -462,7 +645,13 @@ def _pdf_signature_rows(report: Report, pdf_bytes: bytes, item: dict, now: datet
         _pdf_cms_rows(report, ci.signed_data, der, signed, detail, now)
         return detail
 
-    # 2) 国密电子印章容器
+    # 2) 国密电子签章 SignedData（OID 1.2.156.10197.6.1.4.2.2，detached）
+    gm_signed = parse_gm_signed_data(der)
+    if gm_signed is not None:
+        _pdf_gm_signed_rows(report, gm_signed, signed, detail, now)
+        return detail
+
+    # 3) 国密电子印章容器
     container = parse_container(der)
     if container is None:
         report.add("sigval", "电子签章签名值正确性", UNKNOWN,
@@ -480,8 +669,9 @@ def _pdf_signature_rows(report: Report, pdf_bytes: bytes, item: dict, now: datet
             f" / {container.cert.spki.curve_label}" if container.cert.spki.curve_label else ""
         )
         report.raw["公钥(HEX)"] = container.cert.spki.key_bits.hex().upper()
-    report.raw["签名原文(HEX)"] = container.signed_data.hex().upper()
-    report.raw["签名值(HEX)"] = container.signature.hex().upper()
+    _add_raw_data(report, "签名原文(HEX)", container.signed_data)
+    _add_raw_data(report, "签名值(HEX)", container.signature)
+
     ok, message = _verify_container(container)
     if ok is None:
         report.add("sigval", "电子签章签名值正确性", UNKNOWN, message)
@@ -557,8 +747,8 @@ def _pdf_cms_rows(report: Report, signed_data, der: bytes, signed: bytes,
     detail.contents_hex = der.hex().upper()
     report.meta["签名算法"] = OID_LABELS.get(signer_info.signature_algorithm_oid, signer_info.signature_algorithm_oid)
     report.meta["公钥算法"] = signer.spki.algorithm_label
-    report.raw["签名原文(HEX)"] = (signer_info.signed_attrs_raw or signed).hex().upper()
-    report.raw["签名值(HEX)"] = detail.signature_hex
+    _add_raw_data(report, "签名原文(HEX)", signer_info.signed_attrs_raw or signed)
+    _add_raw_data(report, "签名值(HEX)", signer_info.signature)
     report.raw["公钥(HEX)"] = signer.spki.key_bits.hex().upper()
 
 
@@ -729,13 +919,13 @@ def verify_ofd(path: str, now: datetime | None = None) -> list[Report]:
             if seal_container.cert is not None:
                 report.meta["印章公钥算法"] = seal_container.cert.spki.algorithm_label
                 report.raw["印章公钥(HEX)"] = seal_container.cert.spki.key_bits.hex().upper()
-            report.raw["印章签名原文(HEX)"] = seal_container.signed_data.hex().upper()
-            report.raw["印章签名值(HEX)"] = seal_container.signature.hex().upper()
+            _add_raw_data(report, "印章签名原文(HEX)", seal_container.signed_data)
+            _add_raw_data(report, "印章签名值(HEX)", seal_container.signature)
             if sv_container is not None and sv_container.cert is not None:
                 report.meta["签章签名算法"] = OID_LABELS.get(sv_container.algorithm_oid, sv_container.algorithm_oid)
                 report.raw["签章公钥(HEX)"] = sv_container.cert.spki.key_bits.hex().upper()
-                report.raw["签章签名原文(HEX)"] = sv_container.signed_data.hex().upper()
-                report.raw["签章签名值(HEX)"] = sv_container.signature.hex().upper()
+                _add_raw_data(report, "签章签名原文(HEX)", sv_container.signed_data)
+                _add_raw_data(report, "签章签名值(HEX)", sv_container.signature)
             report.note("本工具未内置信任根，OFD 证书链信任关系需结合单位 CA/CRL 人工确认。")
             if detail.certificates:
                 report.raw["证书链"] = [c.subject.text() for c in detail.certificates]

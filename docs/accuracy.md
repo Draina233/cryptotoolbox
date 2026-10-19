@@ -66,6 +66,10 @@
   （签章数据 + 证书 + 签名 + 内嵌 Signature.xml 的 SM3），并校验 `Signature.xml` 中每个引用文件
   CheckValue（SM3 Base64）与 ZIP 内实际文件一致；已用用户提供的真实 OFD 样章验证通过（11/11 文件摘要一致）。
 - 结构无法识别时返回“未知”并给出人工复核建议。
+- 兼容国密电子签章 SignedData（ContentInfo OID `1.2.156.10197.6.1.4.2.2`）：证书置于 `[0]`、
+  encapContentInfo 为 detached（OID 可能为 0.0）、SignerInfo 可无 signedAttrs；签名算法 OID
+  `1.2.156.10197.1.301.1` 按 SM2-with-SM3 处理，签名直接覆盖 PDF ByteRange 原文。
+  证书有效期优先按 signedAttrs 的 signingTime 校验；无签署时间时按当前时间校验。
 
 ## 5. PCAP
 

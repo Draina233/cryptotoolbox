@@ -140,7 +140,7 @@ class HomePage(PageBase):
             "pycryptodome（AES/DES/RSA）、pypdf（PDF 解析）；ASN.1 解析为本项目自研，支持国密 SM2 证书。"
         ))
         info.add(HintLabel(
-            "开发者：Draina（河南省中远科技有限公司）｜ 联系方式：draina@qq.com ｜ "
+            "开发者：Draina ｜ 联系方式：draina@qq.com ｜ "
             "https://github.com/Draina233"
         ))
         self.body.addWidget(info)

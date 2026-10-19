@@ -4,6 +4,8 @@ from __future__ import annotations
 import os
 import unittest
 
+from PySide6.QtCore import Qt
+
 
 class UiSmokeTests(unittest.TestCase):
     @classmethod
@@ -44,6 +46,15 @@ class UiSmokeTests(unittest.TestCase):
                     page = self.window.stack.currentWidget()
                     self.assertEqual(getattr(page, "page_id", ""), spec.id,
                                      f"{spec.id} 打开的不是对应页面（可能是加载失败占位页）")
+
+    def test_long_output_wraps(self):
+        from PySide6.QtWidgets import QPlainTextEdit
+
+        from cryptotoolbox.ui.widgets import MonoText
+
+        box = MonoText()
+        self.assertEqual(box.lineWrapMode(), QPlainTextEdit.WidgetWidth)
+        self.assertEqual(box.horizontalScrollBarPolicy(), Qt.ScrollBarAlwaysOff)
 
     def test_app_icon(self):
         self.assertFalse(self.window.windowIcon().isNull())
