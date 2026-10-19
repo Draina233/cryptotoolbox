@@ -319,7 +319,7 @@ class MainWindow(QMainWindow):
     def open_settings(self) -> None:
         dlg = QDialog(self)
         dlg.setWindowTitle("设置")
-        dlg.setMinimumWidth(380)
+        dlg.setMinimumWidth(500)
         form = QFormLayout(dlg)
         theme = QComboBox()
         theme.addItems(["light", "dark"])
@@ -381,10 +381,61 @@ class MainWindow(QMainWindow):
         accent_layout.addWidget(reset_btn)
         accent_layout.addStretch(1)
         form.addRow("强调色：", accent_row)
-        self._update_cb = QCheckBox("启动时检查更新（GitHub Releases）")
+        form.addRow("当前版本：", QLabel(f"v{__version__}"))
+        self._update_cb = QCheckBox("启动时自动检查更新（GitHub Releases）")
         self._update_cb.setChecked(self._setting_bool("check_updates", True))
-        form.addRow("软件更新：", self._update_cb)
+        form.addRow("自动更新：", self._update_cb)
+        manual_row = QWidget()
+        manual_layout = QHBoxLayout(manual_row)
+        manual_layout.setContentsMargins(0, 0, 0, 0)
+        manual_layout.setSpacing(8)
+        manual_btn = QPushButton("立即检查更新")
+        manual_btn.setObjectName("secondary")
+        status_label = QLabel("可手动检查更新")
+        status_label.setObjectName("hintText")
+        status_label.setWordWrap(True)
+        status_label.setMinimumWidth(300)
+        manual_layout.addWidget(manual_btn)
+        manual_layout.addWidget(status_label, 1)
+        form.addRow("手动检查：", manual_row)
+
+        def set_update_status(text: str, color_key: str) -> None:
+            status_label.setStyleSheet(f"color: {palette()[color_key]};")
+            status_label.setText(text)
+
+        def run_manual_check() -> None:
+            manual_btn.setEnabled(False)
+            set_update_status("正在检查 GitHub Releases…", "text_secondary")
+            checker = UpdateChecker(on_manual_result, dlg)
+            dlg._manual_checker = checker
+            checker.check()
+
+        def on_manual_result(info) -> None:
+            if not dlg.isVisible():
+                return
+            manual_btn.setEnabled(True)
+            checker = getattr(dlg, "_manual_checker", None)
+            error = getattr(checker, "error", "") if checker else ""
+            if error:
+                set_update_status(f"检查失败：{error}\n请检查网络或代理设置后重试。", "danger")
+                return
+            if info is None:
+                set_update_status("检查失败：未获取到发布信息，请确认仓库已发布 Release。", "danger")
+                return
+            if is_newer(info.version, __version__):
+                set_update_status(f"发现新版本 {info.version}（当前 v{__version__}）", "primary")
+                UpdateDialog(info, __version__, dlg).exec()
+            else:
+                set_update_status(f"已是最新版本（当前 v{__version__}，远端 v{info.version}）", "success")
+
+        manual_btn.clicked.connect(run_manual_check)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        ok_button = buttons.button(QDialogButtonBox.Ok)
+        if ok_button is not None:
+            ok_button.setText("确定")
+        cancel_button = buttons.button(QDialogButtonBox.Cancel)
+        if cancel_button is not None:
+            cancel_button.setText("取消")
         buttons.accepted.connect(dlg.accept)
         buttons.rejected.connect(dlg.reject)
         form.addRow(buttons)
