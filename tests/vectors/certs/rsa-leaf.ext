@@ -1,0 +1,6 @@
+basicConstraints=CA:FALSE
+keyUsage=critical,digitalSignature,keyEncipherment
+extendedKeyUsage=serverAuth
+subjectAltName=DNS:leaf.example.com
+subjectKeyIdentifier=hash
+authorityKeyIdentifier=keyid:always

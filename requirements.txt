@@ -1,0 +1,21 @@
+# 密评工具箱 v2 运行依赖（Python 3.11 - 3.13，Windows 10/11）
+# 安装：python -m pip install -r requirements.txt
+#
+# 说明：
+# - PySide6 提供 GUI（LGPL 许可，可自由分发）
+# - gmalg 提供 SM2/SM3/SM4/SM9/ZUC 的纯 Python 实现（支持自定义用户标识）
+# - tongsuopy 提供 SM3/SM4/SM4-GCM 的高速 C 实现（BabaSSL），用于大文件
+# - pycryptodome 提供 AES/DES/3DES/RSA/CMAC
+# - pypdf 用于 PDF AcroForm 与签名域解析
+# - gmssl/asn1crypto 仅用于测试交叉验证（运行时可缺省）
+
+PySide6>=6.8
+numpy>=1.26
+gmalg>=1.1.2
+tongsuopy>=1.0.1
+pycryptodome>=3.20
+pypdf>=6.0
+
+# 交叉验证与测试辅助（可选）
+gmssl>=3.2
+asn1crypto>=1.5

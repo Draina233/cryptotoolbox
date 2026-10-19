@@ -1,0 +1,9 @@
+start
+app
+window
+page opened RandomnessPage
+generated
+do_run returned, task: True
+SHOW_ERROR 随机性检测失败 TypeError('Task._emit_progress() takes from 2 to 3 positional arguments but 4 were given')
+loop end task: False rows: 0
+summary: 
