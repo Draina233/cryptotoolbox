@@ -486,11 +486,15 @@ class MainWindow(QMainWindow):
         layout.addLayout(top)
 
         desc = QLabel(
-            "面向商用密码应用安全性评估：算法校验、证书与签章核验、协议取证、随机性检测。\n\n"
-            "技术栈：PySide6 / gmalg / tongsuopy / PyCryptodome；ASN.1 解析为自研实现，"
-            "支持国密 SM2 证书。\n"
-            "参考标准：GM/T 0005-2021；随机性检测参考 guojuntang/gmt_randomness_test（BSD-3-Clause）。"
+            f"版本号：v{__version__}\n\n"
+            "仅供学习交流 禁止二改商用"
         )
+        desc.setObjectName("aboutNotice")
+        desc.setAlignment(Qt.AlignCenter)
+        notice_font = desc.font()
+        notice_font.setPointSize(12)
+        notice_font.setBold(True)
+        desc.setFont(notice_font)
         desc.setWordWrap(True)
         layout.addWidget(desc)
         dev = QLabel("开发者：Draina ｜ draina@qq.com ｜ https://github.com/Draina233")
