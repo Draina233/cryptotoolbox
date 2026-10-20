@@ -84,7 +84,7 @@ class MainWindow(QMainWindow):
         accent = str(self._settings.value("accent", DEFAULT_ACCENT)) or DEFAULT_ACCENT
         set_theme(theme, scale, accent)
 
-        self.setWindowTitle(f"密评工具箱 · V{__version__}")
+        self.setWindowTitle(f"{__app_name__} · V{__version__}")
         self.setWindowIcon(QIcon(app_icon_path()))
         self._apply_window_geometry()
         self.setMinimumSize(980, 620)
@@ -187,7 +187,7 @@ class MainWindow(QMainWindow):
         self.cancel_btn.clicked.connect(self._cancel_task)
         h.addWidget(self.cancel_btn)
 
-        ver = QLabel(f"密评工具箱V{__version__}   ©Draina")
+        ver = QLabel(f"{__app_name__}V{__version__}   ©Draina")
         ver.setObjectName("statusText")
         h.addWidget(ver)
         return bar

@@ -29,7 +29,7 @@ def _bytes(text: str, fmt: str, strict: bool = True) -> bytes:
 class BlockCipherPage(PageBase):
     page_id = "blockcipher"
     title = "分组密码"
-    subtitle = "AES / SM4 / DES / 3DES，模式与填充严格校验；流模式不套填充，CTR 支持 16 字节 IV。"
+    subtitle = "AES / SM4 / DES / 3DES，模式与填充校验；流模式不套填充，CTR 支持 16 字节 IV。"
 
     def build_ui(self) -> None:
         card = self.card("参数")
@@ -158,7 +158,7 @@ class BlockCipherPage(PageBase):
 class ZucPage(PageBase):
     page_id = "streamcipher"
     title = "序列算法（ZUC）"
-    subtitle = "ZUC-128 加解密（GM/T 0001.1）；ZUC-256 与 ZUC-MAC 当前版本明确标注为未支持。"
+    subtitle = "ZUC-128 加解密（GM/T 0001.1）；ZUC-256 与 ZUC-MAC 当前版本未支持。"
 
     def build_ui(self) -> None:
         card = self.card("参数")
@@ -230,7 +230,7 @@ class ZucPage(PageBase):
 class GcmPage(PageBase):
     page_id = "gcm"
     title = "GCM 模式"
-    subtitle = "AES-GCM / SM4-GCM 认证加密，支持 AAD 与认证标签校验；认证失败会明确区分原因。"
+    subtitle = "AES-GCM / SM4-GCM 认证加密，支持 AAD 与认证标签校验。"
 
     def build_ui(self) -> None:
         card = self.card("参数")

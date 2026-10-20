@@ -50,7 +50,7 @@ def _add_row(table: QTableWidget, values: list[str]) -> None:
 class PcapPage(PageBase):
     page_id = "pcap"
     title = "PCAP 加密数据提取"
-    subtitle = "解析 pcap/pcapng：TLS/TLCP 握手、套件、证书与加密记录（保留记录边界）、ESP、IKE 证书。"
+    subtitle = "解析 pcap/pcapng：TLS/TLCP 握手、套件、证书与加密记录、ESP、IKE 证书。"
 
     def build_ui(self) -> None:
         card = self.card("抓包文件")

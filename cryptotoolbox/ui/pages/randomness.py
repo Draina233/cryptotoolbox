@@ -71,7 +71,7 @@ MODE_OPTIONS = [
 class RandomnessPage(PageBase):
     page_id = "randomness"
     title = "随机性检测"
-    subtitle = "参照 GMT_Randomness_Test：左侧选择检测方法，中间输入数据/参数，右侧展示汇总与逐项明细（P/Q 值与判定）。"
+    subtitle = "左侧选择检测方法，中间输入数据/参数，右侧展示汇总与逐项明细。"
 
     def build_ui(self) -> None:
         columns = QHBoxLayout()

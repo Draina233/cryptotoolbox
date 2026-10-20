@@ -40,7 +40,7 @@ from .base import PageBase
 class EncodingsPage(PageBase):
     page_id = "encodings"
     title = "常见编码转换"
-    subtitle = "十六进制 / Base64 / Base32 / URL / 文本互转，输入严格校验（奇数长度与非法字符会明确报错）。"
+    subtitle = "十六进制 / Base64 / Base32 / URL / 文本互转、英文大小写、去空格、字符反转、URL编解码、长度统计等等....。"
 
     def build_ui(self) -> None:
         card = self.card("格式转换", "输入格式 → 输出格式")
@@ -136,7 +136,7 @@ class EncodingsPage(PageBase):
 class CipherLengthPage(PageBase):
     page_id = "length"
     title = "密文长度分析"
-    subtitle = "根据长度与结构特征推断可能的算法类型（启发式，不做真实解密）。"
+    subtitle = "根据长度与结构特征推断输入数据可能由何种算法类型产生。"
 
     def build_ui(self) -> None:
         card = self.card("待分析数据")

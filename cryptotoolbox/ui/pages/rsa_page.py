@@ -25,7 +25,7 @@ KEY_FORMATS = ["PEM / HEX 自动识别", "十六进制", "PEM"]
 class RsaPage(PageBase):
     page_id = "rsa"
     title = "RSA 签名验签"
-    subtitle = "PKCS#1 v1.5 与 PSS；区分“签名无效”与“输入/密钥错误”，不会把参数错误显示成验签失败。"
+    subtitle = "支持PKCS#1 v1.5 与 PSS。"
 
     def build_ui(self) -> None:
         card = self.card("密钥")

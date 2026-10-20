@@ -150,7 +150,7 @@ class UpdateChecker:
         from PySide6.QtNetwork import QNetworkRequest
 
         request = QNetworkRequest(QUrl(url))
-        request.setHeader(QNetworkRequest.KnownHeaders.UserAgentHeader, "cryptotoolbox-updater")
+        request.setHeader(QNetworkRequest.KnownHeaders.UserAgentHeader, "youyou-cryptotoolbox-updater")
         request.setRawHeader(b"Accept", b"application/vnd.github+json")
         request.setTransferTimeout(8000)
         request.setAttribute(

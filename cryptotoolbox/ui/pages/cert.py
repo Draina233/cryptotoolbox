@@ -52,7 +52,7 @@ def _load_certs(text: str, fmt: str) -> list:
 class CertChainPage(PageBase):
     page_id = "certchain"
     title = "证书链验证"
-    subtitle = "逐级验签（RSA / ECDSA / SM2）、有效期、CA 基本约束与 pathLen；结果如实区分通过/失败/未知。"
+    subtitle = "逐级验签（RSA / ECDSA / SM2）、有效期、CA 基本约束与 pathLen。"
 
     def build_ui(self) -> None:
         leaf = self.card("终端实体证书", "左侧输入要被验证的证书")
@@ -135,7 +135,7 @@ class CertChainPage(PageBase):
 class RevocationPage(PageBase):
     page_id = "revocation"
     title = "证书吊销检查"
-    subtitle = "离线 CRL 检查（验签、有效期、颁发者匹配、序列号命中）；在线 OCSP 暂未提供。"
+    subtitle = "离线 CRL 检查（验签、有效期、颁发者匹配、序列号命中）；在线 OCSP 尚未支持。"
 
     def build_ui(self) -> None:
         card = self.card("待检证书")

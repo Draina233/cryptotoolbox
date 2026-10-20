@@ -1,4 +1,4 @@
-# 第三方声明（NOTICE）
+# 悠优密评百宝箱 · 第三方声明（NOTICE）
 
 本项目在实现与测试中使用了以下第三方资源，特此声明：
 
@@ -10,6 +10,11 @@
 - 许可证：BSD 3-Clause（Copyright (c) 2023, Guojun Tang）。原许可证文本：
   <https://opensource.org/licenses/BSD-3-Clause>。该许可证要求保留版权声明、条件与免责声明，
   且不得以版权人名义为衍生产品背书。
+
+## 应用图标
+
+- 图标文件：`cryptotoolbox/assets/app_icon.ico`、`app_icon_*.png`
+- 图标署名：`悠优密评百宝箱`（©Draina）
 
 ## 测试向量来源
 

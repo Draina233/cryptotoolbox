@@ -22,7 +22,7 @@ from .base import PageBase
 class SealPage(PageBase):
     page_id = "seal"
     title = "电子签章校验"
-    subtitle = "PDF（CMS/PKCS#7 嵌入式签名）与 OFD（Seal.esl + SignedValue）；支持 RSA / ECDSA / SM2。"
+    subtitle = "PDF（CMS/PKCS#7 嵌入式签名）与 OFD（Seal.esl + SignedValue）；支持 RSA / ECDSA / SM2。(不同厂家电子签章格式多样，未能顺利解析请将签章样本脱敏反馈，将尽快适配)"
 
     def build_ui(self) -> None:
         card = self.card("待校验文件")

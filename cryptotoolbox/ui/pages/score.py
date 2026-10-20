@@ -26,7 +26,7 @@ LEVEL_OPTIONS = [("2", "二级系统"), ("3", "三级系统"), ("4", "四级系�
 class ScorePage(PageBase):
     page_id = "score"
     title = "分数计算"
-    subtitle = "勾选适用项并填写 0~1 得分（1=符合，0=不符合，0~1=部分符合；未勾选为不适用），计算总分与项数统计。"
+    subtitle = "勾选适用项并填写 0~1 得分（1=符合，0=不符合，0~1=部分符合；未勾选为不适用），计算总分与符合项数统计。"
 
     def build_ui(self) -> None:
         header = QFrame()

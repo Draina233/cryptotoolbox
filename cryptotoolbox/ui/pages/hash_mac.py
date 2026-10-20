@@ -22,7 +22,7 @@ KEY_FORMATS = ["十六进制", "Base64", "字符串"]
 class HashPage(PageBase):
     page_id = "hash"
     title = "哈希算法"
-    subtitle = "SM3 / SHA-1 / SHA-2 / SHA-3 / MD5 与 HMAC；SM3 与 HMAC-SM3 均按标准实现。"
+    subtitle = "SM3 / SHA-1 / SHA-2 / SHA-3 / MD5 与 HMAC"
 
     def build_ui(self) -> None:
         card = self.card("参数")
@@ -104,7 +104,7 @@ class HashPage(PageBase):
 class MacPage(PageBase):
     page_id = "mac"
     title = "MAC 算法"
-    subtitle = "CBC-MAC / CMAC（AES、SM4）；其它模式在标准参数完善前明确标注未支持。"
+    subtitle = "CBC-MAC / CMAC（AES、SM4）。"
 
     def build_ui(self) -> None:
         card = self.card("参数")

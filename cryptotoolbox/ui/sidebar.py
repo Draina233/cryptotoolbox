@@ -1,4 +1,4 @@
-﻿"""左侧导航：品牌区 + 搜索 + 分组树 + 版本信息。"""
+"""左侧导航：品牌区 + 搜索 + 分组树 + 版本信息。"""
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import __version__
+from .. import __app_name__, __version__
 from .pages import GROUPS
 from .icons import make_icon
 from . import state
@@ -71,7 +71,7 @@ class Sidebar(QFrame):
         hv = QVBoxLayout(header)
         hv.setContentsMargins(18, 16, 18, 14)
         hv.setSpacing(2)
-        title = _BrandLabel("密评工具箱")
+        title = _BrandLabel(__app_name__)
         title.setObjectName("brandTitle")
         title.setCursor(Qt.PointingHandCursor)
         title.setToolTip("返回首页")

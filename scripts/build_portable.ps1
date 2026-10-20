@@ -1,5 +1,5 @@
 param(
-    [string]$Name = "密评工具箱",
+    [string]$Name = "悠优密评百宝箱",
     [string]$Version = "2.0.1"
 )
 

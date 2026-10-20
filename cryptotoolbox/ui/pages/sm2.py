@@ -25,7 +25,7 @@ UID_FORMATS = ["十六进制", "ASCII"]
 class Sm2SignPage(PageBase):
     page_id = "sm2_sign"
     title = "SM2 签名验签"
-    subtitle = "SM3withSM2；用户标识（UID）真正参与 ZA 计算，支持 r||s 与 DER 两种签名格式。"
+    subtitle = "SM3withSM2；用户标识（UID）参与 ZA 计算，支持 r||s 与 DER 两种签名格式。"
 
     def build_ui(self) -> None:
         card = self.card("密钥")
@@ -167,7 +167,7 @@ class Sm2SignPage(PageBase):
 class Sm2CryptPage(PageBase):
     page_id = "sm2_crypt"
     title = "SM2 加密解密"
-    subtitle = "支持 C1C3C2 与 C1C2C3 密文排列；解密时校验 C3 摘要，密文被篡改会明确报错。"
+    subtitle = "支持 C1C3C2 与 C1C2C3 密文排列；解密时校验 C3 摘要，密文被篡改会报错。"
 
     def build_ui(self) -> None:
         card = self.card("密钥")

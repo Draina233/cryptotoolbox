@@ -4,11 +4,11 @@
   kids=[
     StringFileInfo([
       StringTable('080404B0', [
-        StringStruct('FileDescription', '密评工具箱 - 离线密码评估与验证'),
+        StringStruct('FileDescription', '悠优密评百宝箱 - 离线密码评估与验证'),
         StringStruct('FileVersion', '2.0.1'),
         StringStruct('InternalName', 'cryptotoolbox'),
-        StringStruct('OriginalFilename', '密评工具箱.exe'),
-        StringStruct('ProductName', '密评工具箱'),
+        StringStruct('OriginalFilename', '悠优密评百宝箱.exe'),
+        StringStruct('ProductName', '悠优密评百宝箱'),
         StringStruct('ProductVersion', '2.0.1'),
         StringStruct('CompanyName', 'Draina'),
         StringStruct('LegalCopyright', '©Draina')
