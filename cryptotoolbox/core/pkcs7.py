@@ -30,16 +30,23 @@ class P7Info:
     cert_errors: list[str] = field(default_factory=list)
     digest_algorithms: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    gm: dict = field(default_factory=dict)
 
 
 CONTENT_TYPE_LABELS = {
     "1.2.840.113549.1.7.1": "data",
     "1.2.840.113549.1.7.2": "signedData (PKCS#7/CMS)",
     "1.2.156.10197.6.1.4.2.1": "signedData (GM/T 0010 SM2)",
+    "1.2.156.10197.6.1.4.2.2": "signedData (国密电子签章结构 1.2.156.10197.6.1.4.2.2)",
 }
 
 
 def parse_p7(der: bytes) -> P7Info:
+    # 国密电子签章容器（SignedData 结构，但 ContentInfo OID 非标准）单独适配
+    if _is_gm_signed_container(der):
+        from .der import parse_tlv
+
+        return _parse_gm_signed_container(der, parse_tlv(der))
     ci = parse_content_info(der)
     label = CONTENT_TYPE_LABELS.get(ci.content_type, f"未知内容类型 {ci.content_type}")
     info = P7Info(content_type=ci.content_type, content_type_label=label, signed=ci.signed_data)
@@ -55,6 +62,54 @@ def parse_p7(der: bytes) -> P7Info:
             info.certificates.append(parse_certificate(der_cert))
         except Exception as exc:  # noqa: BLE001
             info.cert_errors.append(str(exc))
+    return info
+
+
+GM_SIGNED_CONTENT_TYPE = "1.2.156.10197.6.1.4.2.2"
+
+
+def _is_gm_signed_container(der: bytes) -> bool:
+    """是否为 OID 1.2.156.10197.6.1.4.2.2 的国密签章 SignedData（内容类型非标准）。"""
+    from .der import DerError, parse_tlv
+
+    try:
+        items = parse_tlv(der).children()
+    except (DerError, Exception):  # noqa: BLE001
+        return False
+    return (len(items) == 2 and items[0].tag == 6
+            and items[0].as_oid() == GM_SIGNED_CONTENT_TYPE and items[1].constructed)
+
+
+def _parse_gm_signed_container(der: bytes, top) -> P7Info:
+    """解析 OID 1.2.156.10197.6.1.4.2.2 的国密签章 SignedData（detached，签名直接覆盖原文）。"""
+    from .seal import parse_gm_signed_data
+
+    content_type = "1.2.156.10197.6.1.4.2.2"
+    info = P7Info(
+        content_type=content_type,
+        content_type_label=CONTENT_TYPE_LABELS[content_type],
+        signed=None,
+        content_attached=False,
+    )
+    data = parse_gm_signed_data(der)
+    if data is None:
+        info.warnings.append("无法解析国密签章 SignedData 结构。")
+        return info
+    cert = data.get("cert")
+    if cert is not None:
+        info.certificates.append(cert)
+    info.digest_algorithms = [data.get("digest_oid", "")]
+    info.gm = {
+        "signature_oid": data.get("signature_oid", ""),
+        "signature": data.get("signature", b""),
+        "signed_attrs": data.get("signed_attrs"),
+        "cert": cert,
+    }
+    if data.get("signed_attrs") is None:
+        info.warnings.append(
+            "该结构为国密电子签章数据，采用 detached 签名且无 signedAttrs，"
+            "签名直接覆盖原文；如为 detached，请在下方填写签名原文后再验签。"
+        )
     return info
 
 
@@ -133,6 +188,8 @@ def verify_p7(der: bytes, detached_content: bytes | None = None) -> Report:
     info = parse_p7(der)
     report = Report(title="P7 / CMS 签名数据解析与验证")
     report.meta["内容类型"] = f"{info.content_type}（{info.content_type_label}）"
+    if info.gm:
+        return _verify_gm_container(info, report, detached_content)
     if info.signed is None:
         report.add("content", "SignedData 结构", FAIL, "内容不是 CMS/PKCS#7 SignedData。")
         for warning in info.warnings:
@@ -169,6 +226,57 @@ def verify_p7(der: bytes, detached_content: bytes | None = None) -> Report:
         for err in info.cert_errors:
             report.note(f"证书解析警告：{err}")
     return report
+
+
+def _verify_gm_container(info: P7Info, report: Report, detached_content: bytes | None) -> Report:
+    """国密签章容器验签：签名直接覆盖原文（detached 时需提供原文）。"""
+    gm = info.gm
+    cert = gm.get("cert")
+    signature_oid = gm.get("signature_oid", "")
+    signature = gm.get("signature", b"")
+    attrs = gm.get("signed_attrs")
+    report.add("content", "SignedData 结构", PASS, "已识别国密电子签章 SignedData 结构。")
+    report.add("alg", "签名算法", PASS, f"{_sig_label(signature_oid)}（{signature_oid}）")
+    data = b""
+    if attrs is not None:
+        data = attrs.raw if attrs.raw[:1] != b"\xa0" else b"\x31" + attrs.raw[1:]
+    elif detached_content is not None:
+        data = detached_content
+    if cert is None:
+        report.add("signer-cert", "签名证书", UNKNOWN, "未在签名数据中找到可解析的证书。")
+    else:
+        report.add("signer-cert", "签名证书", PASS,
+                   f"{cert.subject.text()}（序列号 {cert.serial_hex}）")
+    if not data:
+        report.add("signer-sig", "签名值", SKIP,
+                   "该结构为 detached 签名且无 signedAttrs：请在“分离式签名原文”中填写被签名数据后重新验证。")
+    elif cert is None:
+        report.add("signer-sig", "签名值", UNKNOWN, "缺少签名证书，无法验证。")
+    else:
+        try:
+            ok, message = verify_signature(
+                spki=cert.spki,
+                signature_algorithm_oid=signature_oid,
+                signature_algorithm_params=b"",
+                data=data,
+                signature=signature,
+                signer_uid=[cert.subject.raw, b"", b"1234567812345678"],
+            )
+            report.add("signer-sig", "签名值", PASS if ok else FAIL, message)
+        except VerifyError as exc:
+            report.add("signer-sig", "签名值", UNKNOWN, str(exc))
+    report.meta["签名值长度"] = len(signature)
+    for warning in info.warnings:
+        report.note(warning)
+    return report
+
+
+def _sig_label(oid: str) -> str:
+    return {
+        "1.2.156.10197.1.501": "SM3withSM2",
+        "1.2.156.10197.1.301.1": "SM3withSM2（国密电子签章）",
+        "1.2.840.113549.1.1.11": "SHA256withRSA",
+    }.get(oid, oid)
 
 
 def _hash_label(oid: str) -> str:

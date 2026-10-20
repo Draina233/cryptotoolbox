@@ -271,12 +271,18 @@ class Pkcs7Page(PageBase):
         self.cert_combo.clear()
         self._certs = []
         try:
-            ci = parse_content_info(self._last_der)
-            if ci.signed_data:
-                for der_cert in ci.signed_data.certificates:
-                    cert = parse_certificate(der_cert)
-                    self.cert_combo.addItem(cert.subject.common_name() or cert.subject.text()[:40])
-                    self._certs.append(certificate_to_pem(der_cert))
+            info = pkcs7.parse_p7(self._last_der)
+            cert_ders: list[bytes] = []
+            if info.signed is not None:
+                cert_ders = list(info.signed.certificates)
+            elif info.gm and info.gm.get("cert") is not None:
+                cert_ders = [info.gm["cert"].der]
+            else:
+                cert_ders = [cert.der for cert in info.certificates]
+            for der_cert in cert_ders:
+                cert = parse_certificate(der_cert)
+                self.cert_combo.addItem(cert.subject.common_name() or cert.subject.text()[:40])
+                self._certs.append(certificate_to_pem(der_cert))
         except Exception:  # noqa: BLE001
             pass
         self.cert_combo.blockSignals(False)

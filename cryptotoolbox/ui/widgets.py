@@ -1,9 +1,10 @@
-﻿"""通用界面控件：卡片、表单行、状态徽章、结果表格、结果面板、文件选择等。
+"""通用界面控件：卡片、表单行、状态徽章、结果表格、结果面板、文件选择等。
 
 所有页面共享这些控件，保证视觉与交互一致。
 """
 from __future__ import annotations
 
+import json
 from typing import Callable, Iterable, Optional
 
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
@@ -352,6 +353,72 @@ def _status_item(status: str) -> QTableWidgetItem:
     return item
 
 
+def _is_admin() -> bool:
+    import ctypes
+    import sys
+
+    if sys.platform != "win32":
+        return False
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _explain_write_error(exc: Exception, path: str) -> tuple[str, str]:
+    """把导出失败原因归纳为 elevate / locked / error 与提示文案。"""
+    text = str(exc)
+    lower = text.lower()
+    if ("permission" in lower or "denied" in lower or "access is denied" in lower
+            or "拒绝" in text or "errno 13" in lower or "0x5" in lower):
+        return "elevate", (
+            "目标目录没有写入权限（常见于 Program Files、系统盘根目录或受保护的文件夹）。\n"
+            "可以改存到“文档/桌面”，或点击“是”以管理员权限重新保存。"
+        )
+    if "used by another" in lower or "另一个进程" in text:
+        return "locked", "目标文件正被其他程序占用，请关闭后重试。"
+    if "no such file" in lower or "cannot find" in lower or "errno 2" in lower or "找不到" in text:
+        return "elevate", "目标文件夹不存在或不可写（可能是受保护的系统目录）。请选择已存在的目录，或以管理员权限保存。"
+    return "error", "请检查目标路径是否合法、磁盘空间是否充足。"
+
+
+def _elevate_and_copy(text: str, target: str) -> str:
+    """以管理员权限把报告写回目标路径；返回 elevated / copy / already / failed。"""
+    import os
+    import subprocess
+    import tempfile
+
+    from PySide6.QtWidgets import QMessageBox
+
+    if _is_admin():
+        return "already"
+    answer = QMessageBox.question(
+        None, "需要管理员权限",
+        f"目标位置需要管理员权限：\n{target}\n\n是否以管理员身份重新保存？\n"
+        "（报告内容也会同时复制到剪贴板，作为兜底）",
+        QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes,
+    )
+    QApplication.clipboard().setText(text)
+    if answer != QMessageBox.Yes:
+        return "copy"
+    staging = os.path.join(tempfile.gettempdir(), "cryptotoolbox-report.tmp")
+    script = os.path.join(tempfile.gettempdir(), "cryptotoolbox-copy.cmd")
+    try:
+        with open(staging, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        with open(script, "w", encoding="mbcs", errors="replace") as fh:
+            fh.write("@echo off\r\n")
+            fh.write(f'copy /Y "{staging}" "{target}" >nul\r\n')
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             f"Start-Process -FilePath '{script}' -Verb RunAs -Wait"],
+            check=False,
+        )
+        return "elevated" if os.path.exists(target) else "copy"
+    except Exception:  # noqa: BLE001
+        return "copy"
+
+
 class ResultPanel(Card):
     """标准结果面板：状态徽章 + 汇总 + 检查表 + 详情 + 导出。"""
 
@@ -404,7 +471,8 @@ class ResultPanel(Card):
 
         from ..core.result import export_report
 
-        title = "".join(ch for ch in (self._last_report.title or "报告") if ch not in '\\/:*?"<>|').strip() or "报告"
+        report = self._last_report
+        title = "".join(ch for ch in (report.title or "报告") if ch not in '\\/:*?"<>|').strip() or "报告"
         path, selected = QFileDialog.getSaveFileName(
             self, "导出报告", f"{title}.txt",
             "文本 (*.txt);;JSON (*.json);;HTML (*.html)",
@@ -413,10 +481,29 @@ class ResultPanel(Card):
             return
         if not Path(path).suffix:
             path += ".json" if "JSON" in selected else (".html" if "HTML" in selected else ".txt")
+        if path.lower().endswith(".json"):
+            self._export_text = json.dumps(report.to_dict(), ensure_ascii=False, indent=2)
+        elif path.lower().endswith((".html", ".htm")):
+            self._export_text = report.to_html()
+        else:
+            self._export_text = report.to_text()
         try:
             export_report(self._last_report, path)
         except Exception as exc:  # noqa: BLE001
-            QMessageBox.warning(self, "导出失败", f"无法写入报告：{exc}")
+            status, hint = _explain_write_error(exc, path)
+            if status == "elevate":
+                upgraded = _elevate_and_copy(getattr(self, "_export_text", ""), path)
+                if upgraded == "elevated":
+                    win = self.window()
+                    if hasattr(win, "notify"):
+                        win.notify(f"报告已导出（管理员权限）：{path}")
+                    return
+                if upgraded == "copy":
+                    QMessageBox.information(self, "已复制报告内容", "已把报告内容复制到剪贴板，可粘贴到有权限的位置保存。")
+                    return
+            if status == "elevated":
+                return
+            QMessageBox.warning(self, "导出失败", f"无法写入报告：{exc}\n\n{hint}")
             return
         win = self.window()
         if hasattr(win, "notify"):

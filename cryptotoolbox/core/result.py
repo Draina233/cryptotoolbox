@@ -53,6 +53,7 @@ class Report:
     notes: list[str] = field(default_factory=list)
     meta: dict[str, Any] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict)
+    full_raw: dict[str, str] = field(default_factory=dict)
 
     # ------------------------------------------------------------ 构建
     def add(self, key: str, label: str, status: str = UNKNOWN, detail: str = "", **extra) -> CheckResult:
@@ -74,8 +75,11 @@ class Report:
         counts = self.counts()
         if counts.get(FAIL):
             return FAIL
-        if counts.get(UNKNOWN) or counts.get(SKIP):
-            return UNKNOWN if not counts.get(PASS) else (UNKNOWN if counts.get(UNKNOWN) else PASS)
+        if counts.get(UNKNOWN):
+            return UNKNOWN
+        # 只有 SKIP（例如 detached 签名未提供原文）不算通过，避免误导
+        if counts.get(SKIP):
+            return UNKNOWN
         return PASS if counts.get(PASS) else UNKNOWN
 
     # ------------------------------------------------------------ 序列化
@@ -99,7 +103,19 @@ class Report:
             lines.append("")
             lines.append(f"--- {key} ---")
             lines.append(_flatten(value))
+        full = self._full_raw_text()
+        if full:
+            lines.append(full)
         return "\n".join(lines) + "\n"
+
+    def _full_raw_text(self) -> str:
+        if not self.full_raw:
+            return ""
+        lines = ["", "完整签名数据（未截断）"]
+        for key, value in self.full_raw.items():
+            lines.append(f"{key}（{len(value) // 2} 字节）:")
+            lines.append(value)
+        return "\n".join(lines)
 
     def to_dict(self) -> dict:
         return {
@@ -119,6 +135,7 @@ class Report:
             ],
             "notes": self.notes,
             "raw": {k: _jsonable(v) for k, v in self.raw.items()},
+            "full_raw": dict(self.full_raw),
             "counts": self.counts(),
             "verdict": self.verdict(),
         }
@@ -165,6 +182,7 @@ pre {{ background:#fff; border:1px solid #DFE7F1; border-radius:8px; padding:10p
 <table><thead><tr><th>检测项</th><th>结果</th><th>说明</th></tr></thead><tbody>{''.join(rows_html)}</tbody></table>
 {('<div class="note"><b>说明</b><ul>' + notes_html + "</ul></div>") if notes_html else ""}
 {raw_html}
+{(('<h2>完整签名数据（未截断）</h2>' + ''.join(f"<pre>{escape(k)}（{len(v) // 2} 字节）\n{escape(v)}</pre>" for k, v in self.full_raw.items())) if self.full_raw else "")}
 </body></html>"""
 
 

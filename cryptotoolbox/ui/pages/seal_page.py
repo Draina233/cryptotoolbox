@@ -70,7 +70,14 @@ class SealPage(PageBase):
             panel = ResultPanel(report.title)
             panel.render(report)
             self._panels.append(panel)
-            self.tabs.addTab(panel, f"签章 {index + 1}")
+            verdict = report.verdict()
+            mark = {"pass": "✔", "fail": "✘"}.get(verdict, "?")
+            self.tabs.addTab(panel, f"{mark} 签章 {index + 1}")
         total_ok = sum(1 for report in reports if report.verdict() == "pass")
-        self.status.setText(f"校验完成：{len(reports)} 个签章，{total_ok} 个通过。")
+        expired = sum(
+            1 for report in reports
+            if any(row.key == "cert-validity" and row.status == "fail" and "过期" in row.detail for row in report.rows)
+        )
+        detail = f"（其中 {expired} 个因签名证书已过期未通过）" if expired else ""
+        self.status.setText(f"校验完成：{len(reports)} 个签章，{total_ok} 个通过{detail}。")
         self.notify("电子签章校验完成")

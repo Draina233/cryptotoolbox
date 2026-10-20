@@ -255,3 +255,33 @@ def build_gm_signed_pdf(cert_der: bytes, key) -> bytes:
         build_tlv(0xA0, signed_data),
     )
     return build_signed_pdf(content_info)
+
+
+
+def build_gm_seal_container(cert_der: bytes, key) -> bytes:
+    """构造 GB/T 38540 形态的电子印章容器：SEQUENCE{印章数据, 证书, 算法 OID, 签名值}。"""
+    from cryptotoolbox.core.der import (
+        build_integer,
+        build_oid,
+        build_sequence,
+        build_tlv,
+    )
+    from cryptotoolbox.core.digest import sm3
+    from cryptotoolbox.core.x509 import parse_certificate
+
+    cert = parse_certificate(cert_der)
+    seal_info = build_sequence(build_tlv(0x0C, "测试电子印章".encode("utf-8")))
+    data = build_sequence(
+        build_integer(1),
+        seal_info,
+        build_tlv(0x18, b"20260102030405Z"),
+        build_tlv(0x03, b"\x00" + sm3(b"pdf-bytes")),
+        build_tlv(0x16, b"[0 1 2 3]"),
+    )
+    signature = sm2.rs_to_der(*sm2.sign(data, key, b"1234567812345678"))
+    return build_sequence(
+        data,
+        build_tlv(0x04, cert_der),
+        build_oid("1.2.156.10197.1.501"),
+        build_tlv(0x03, b"\x00" + signature),
+    )

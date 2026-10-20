@@ -1,6 +1,6 @@
 param(
     [string]$Name = "优悠密评百宝箱",
-    [string]$Version = "2.0.3"
+    [string]$Version = "2.0.4"
 )
 
 $ErrorActionPreference = "Stop"
@@ -44,7 +44,7 @@ if ($proc.ExitCode -ne 0) {
 
 Write-Host "== 3/3 打包 ZIP 与校验值 =="
 $Zip = Join-Path $Root "dist\$($Name)_v$($Version)_免安装.zip"
-if (Test-Path $Zip) { Remove-Item $Zip -Force }
+# 保留历史版本，不删除 dist 中已有的旧包
 Compress-Archive -Path (Join-Path $AppDir "*") -DestinationPath $Zip -CompressionLevel Optimal
 
 $Hash = (Get-FileHash $Zip -Algorithm SHA256).Hash

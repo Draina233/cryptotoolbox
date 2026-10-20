@@ -6,6 +6,6 @@
 - 所有密码学运算均基于成熟实现（gmalg / tongsuopy / pycryptodome）并以官方向量回归
 """
 
-__version__ = "2.0.3"
+__version__ = "2.0.4"
 __app_name__ = "优悠密评百宝箱"
 __app_subtitle__ = "离线密码评估与验证"

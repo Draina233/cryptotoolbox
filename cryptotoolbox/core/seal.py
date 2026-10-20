@@ -93,6 +93,7 @@ def _add_raw_data(report: Report, label: str, data: bytes, limit: int = 4096) ->
     report.raw[base + "(SM3)"] = sm3(data).hex().upper()
     report.raw[base + "长度"] = f"{len(data)} 字节"
     report.raw[base + "(前1024字节)"] = data[:1024].hex().upper() + "…"
+    report.full_raw[label] = data.hex().upper()
 
 
 def _now() -> datetime:
@@ -420,8 +421,9 @@ def _pdf_gm_signed_rows(report: Report, info: dict, signed: bytes,
             if sign_time is not None:
                 report.add("sign_time", "签章时间", PASS, sign_time.isoformat())
             else:
-                report.add("sign_time", "签章时间", SKIP,
-                           "签名数据未包含 signedAttrs/signingTime，PDF /M 为空，无法按签署时刻校验证书。")
+                # 无签署时间属于信息项缺失，不阻断整体结论（按当前时间校验证书）
+                report.add("sign_time", "签章时间", PASS,
+                           "签名数据未包含 signedAttrs/signingTime，PDF /M 为空；已按当前时间校验证书有效期。")
             if verified and cert.time_status(now) == "已过期":
                 report.note("签名值密码学有效，但签名证书当前已过期；如需按签署时点判定，请提供可信时间戳。")
 
@@ -481,7 +483,9 @@ def parse_container(der: bytes) -> Optional[SealContainer]:
             hash_value=_find_bit_string(inner, 32), sign_time=_find_sign_time(inner),
             path=_find_path(inner),
         )
-    if (len(items) == 4 and items[0].tag == TAG_SEQUENCE and items[1].tag == TAG_OCTET_STRING
+    # C) 国密电子印章（GB/T 38540 / GMT-0031 形态）：
+    #    SEQUENCE { 印章数据 SEQUENCE, 证书 OCTET STRING, 签名算法 OID, 签名值 BIT STRING [, [0] 扩展] }
+    if (len(items) >= 4 and items[0].tag == TAG_SEQUENCE and items[1].tag == TAG_OCTET_STRING
             and items[2].tag == TAG_OID and items[3].tag == TAG_BIT_STRING):
         inner = items[0]
         cert = _cert_from_octet(items[1].value)

@@ -191,6 +191,25 @@ class ContainerPdfTests(unittest.TestCase):
         self.assertEqual(report.verdict(), "fail")
 
 
+class GmtSealExtensionTests(unittest.TestCase):
+    """GB/T 38540 印章数据带 [0] 扩展字段时仍应被识别（真实样本形态）。"""
+
+    def test_gmt_seal_with_extension(self):
+        from cryptotoolbox.core.der import parse_tlv
+
+        cert_der = seal_build.load_cert_der(FIXTURES, "sm2-leaf.crt")
+        key = seal_build.load_sm2_private(FIXTURES, "sm2-leaf.key")
+        base = seal_build.build_gm_seal_container(cert_der, key) if hasattr(seal_build, "build_gm_seal_container") else None
+        if base is None:
+            self.skipTest("缺少构造器")
+        top = parse_tlv(base)
+        items = top.children()
+        extended = build_sequence(*[i.raw for i in items], build_tlv(0xA0, build_tlv(0x03, b"\x00\x00")))
+        container = seal.parse_container(extended)
+        self.assertIsNotNone(container)
+        self.assertEqual(len(container.certs), 1)
+
+
 class RealSampleTests(unittest.TestCase):
     SAMPLES = Path(r"D:\密评工具箱\测试样例\签章文件")
 
