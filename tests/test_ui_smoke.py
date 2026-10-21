@@ -47,6 +47,22 @@ class UiSmokeTests(unittest.TestCase):
                     self.assertEqual(getattr(page, "page_id", ""), spec.id,
                                      f"{spec.id} 打开的不是对应页面（可能是加载失败占位页）")
 
+    def test_huge_output_capped(self):
+        from cryptotoolbox.core.result import Report
+        from cryptotoolbox.ui.widgets import MonoText, ResultPanel
+
+        box = MonoText()
+        box.setPlainText("X" * 1_000_000)
+        self.assertLessEqual(len(box.toPlainText()), MonoText.MAX_DISPLAY_CHARS + 200)
+
+        report = Report("大文本")
+        report.add("row", "检查项", "pass", "ok")
+        report.full_raw["签名值(HEX)"] = "AB" * 500_000
+        panel = ResultPanel("大文本")
+        panel.render(report)
+        self.assertLessEqual(len(panel.detail.toPlainText()), 31_000)
+        self.assertIn("完整签名数据", report.to_text())
+
     def test_long_output_wraps(self):
         from PySide6.QtWidgets import QPlainTextEdit
 

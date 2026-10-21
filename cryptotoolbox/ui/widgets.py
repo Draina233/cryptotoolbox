@@ -157,10 +157,22 @@ class StatusChip(QLabel):
 class MonoText(QPlainTextEdit):
     """只读等宽文本区，用于十六进制/结构化结果。"""
 
+    # 输出框硬上限：超长文本不进入排版，防止界面卡死
+    MAX_DISPLAY_CHARS = 30_000
+
+    def setPlainText(self, text: str) -> None:  # noqa: N802 - Qt 命名
+        text = text or ""
+        if len(text) > self.MAX_DISPLAY_CHARS:
+            text = text[: self.MAX_DISPLAY_CHARS] + (
+                f"\n\n…（内容过长，界面仅显示前 {self.MAX_DISPLAY_CHARS} 字符；完整内容请导出）"
+            )
+        super().setPlainText(text)
+
     def __init__(self, placeholder: str = "", min_height: int = 120):
         super().__init__()
         self.setObjectName("mono")
         self.setReadOnly(True)
+        self.setUndoRedoEnabled(False)
         self.setPlaceholderText(placeholder)
         self.setMinimumHeight(min_height)
         # 长十六进制/签名值等按可用宽度自动换行，避免只能横向拖动
@@ -305,6 +317,9 @@ class DropArea(QFrame):
 class ResultTable(QTableWidget):
     """通用只读结果表格。"""
 
+    MAX_ROWS = 1000
+    MAX_CELL_CHARS = 1000
+
     def __init__(self, headers: list[str], min_height: int = 160):
         super().__init__(0, len(headers))
         self.setHorizontalHeaderLabels(headers)
@@ -317,33 +332,61 @@ class ResultTable(QTableWidget):
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
 
     def set_checks(self, rows: Iterable) -> None:
-        """rows: 具有 label/status/detail 属性的对象（CheckResult）。"""
+        """rows: 具有 label/status/detail 属性的对象（CheckResult）"""
         rows = list(rows)
-        self.setRowCount(0)
-        for r in rows:
-            self._append_row([
-                getattr(r, "label", ""),
-                _status_item(getattr(r, "status", "unknown")),
-                getattr(r, "detail", ""),
-            ])
+        total = len(rows)
+        shown = min(total, self.MAX_ROWS)
+        self.setUpdatesEnabled(False)
+        try:
+            self.setRowCount(shown + (1 if total > shown else 0))
+            for index, r in enumerate(rows[:shown]):
+                self._set_row(index, [
+                    getattr(r, "label", ""),
+                    _status_item(getattr(r, "status", "unknown")),
+                    getattr(r, "detail", ""),
+                ])
+        finally:
+            self.setUpdatesEnabled(True)
+        self._finish_batch(total, shown)
 
-    def _append_row(self, values: list) -> None:
-        row = self.rowCount()
-        self.insertRow(row)
+    def _set_row(self, row: int, values: list) -> None:
         for col, value in enumerate(values):
             if isinstance(value, QTableWidgetItem):
                 item = value
             else:
-                item = QTableWidgetItem(str(value))
+                text = str(value)
+                item = QTableWidgetItem(text[: self.MAX_CELL_CHARS] + ("…" if len(text) > self.MAX_CELL_CHARS else ""))
+                item.setToolTip(text[:2000])
                 item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             self.setItem(row, col, item)
-        self.resizeRowsToContents()
+
+    def _append_row(self, values: list) -> None:
+        if self.rowCount() >= self.MAX_ROWS:
+            return
+        row = self.rowCount()
+        self.insertRow(row)
+        self._set_row(row, values)
+
+    def _finish_batch(self, total: int, shown: int) -> None:
+        if total > shown:
+            row = shown
+            note = QTableWidgetItem(f"结果过多，仅显示前 {shown} 条（共 {total} 条）。")
+            note.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            self.setItem(row, 0, note)
+            self.setSpan(row, 0, 1, self.columnCount())
 
     def set_rows(self, rows: list[list]) -> None:
-        self.setRowCount(0)
-        for values in rows:
-            self._append_row([_status_item(v) if v in ("pass", "fail", "unknown", "skip") else v
-                              for v in values])
+        total = len(rows)
+        shown = min(total, self.MAX_ROWS)
+        self.setUpdatesEnabled(False)
+        try:
+            self.setRowCount(shown + (1 if total > shown else 0))
+            for index, values in enumerate(rows[:shown]):
+                self._set_row(index, [_status_item(v) if v in ("pass", "fail", "unknown", "skip") else v
+                                      for v in values])
+        finally:
+            self.setUpdatesEnabled(True)
+        self._finish_batch(total, shown)
 
 
 def _status_item(status: str) -> QTableWidgetItem:
@@ -429,6 +472,8 @@ class ResultPanel(Card):
         self.summary.setWordWrap(True)
         self.body.addWidget(self.summary)
         self.table = ResultTable(["检测项", "结果", "说明"], 150)
+        self.table.setColumnWidth(0, 230)
+        self.table.setColumnWidth(1, 80)
         self.body.addWidget(self.table)
         self.detail = MonoText("详细结果将显示在这里…", 110)
         self.body.addWidget(self.detail)
@@ -459,7 +504,7 @@ class ResultPanel(Card):
         summary_html = f"<b>{report.title}</b>　" + "　".join(chips)
         self.summary.setText(summary_html)
         self.summary.setTextFormat(Qt.RichText)
-        self.detail.setPlainText(report.to_text())
+        self.detail.setPlainText(report.to_display_text())
         self.export_btn.setVisible(True)
 
     def _export(self) -> None:

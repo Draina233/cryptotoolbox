@@ -83,7 +83,7 @@ class Report:
         return PASS if counts.get(PASS) else UNKNOWN
 
     # ------------------------------------------------------------ 序列化
-    def to_text(self) -> str:
+    def to_text(self, include_full: bool = True) -> str:
         lines = [f"{self.title}", "=" * min(60, max(20, len(self.title) * 2))]
         stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         lines.append(f"生成时间：{stamp}")
@@ -103,10 +103,20 @@ class Report:
             lines.append("")
             lines.append(f"--- {key} ---")
             lines.append(_flatten(value))
-        full = self._full_raw_text()
-        if full:
-            lines.append(full)
-        return "\n".join(lines) + "\n"
+        if include_full:
+            full = self._full_raw_text()
+            if full:
+                lines.append(full)
+        return "\n".join(lines)
+
+    def to_display_text(self, max_chars: int = 30_000) -> str:
+        """界面显示用文本：不含完整签名数据，并限制总长度，避免超大报告卡死 UI。"""
+        text = self.to_text(include_full=False)
+        if len(text) > max_chars:
+            text = text[:max_chars] + (
+                f"\n\n…（界面仅显示前 {max_chars} 字符；完整签名数据请使用“导出报告”查看）"
+            )
+        return text + "\n"
 
     def _full_raw_text(self) -> str:
         if not self.full_raw:
